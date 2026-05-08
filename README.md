@@ -1,71 +1,94 @@
 # Visual Odometry Pipeline
-The repo contains a full-stack implementation in Python utilizing OpenCV functions. A general overview of the pipeline is provided below - for a more detailed description, see the [project report](./assets/VAMR_group_project_report_Jensen_Ferranti_Pirini_Rubini.pdf).
+
+Feature-based monocular visual odometry in Python with OpenCV, SciPy, NumPy, and Matplotlib. The pipeline bootstraps an initial 3D landmark map, tracks features with KLT, estimates camera pose with PnP RANSAC, triangulates new landmarks, and can refine recent poses and landmarks with sliding-window bundle adjustment.
 
 https://github.com/user-attachments/assets/f52dea91-8414-4af9-b0e2-8f1d3caf6863
 
-## Overview
+## Highlights
 
-### Initialization
-Before continuous operation, an initial set of 2D-3D point correspondences is found by detecting features in the first frame of the dataset, tracking them forward until the baseline is sufficiently large, and then using the 2D-2D correspondences to estimate the fundamental matrix. The rotation and translation can be recovered and used to triangulate 3D landmarks from the 2D features. A gound plane is estimated using RANSAC and used to initialize the scale based on the average height of a car. These correspondences are used to initialize a Markovian state used in continous operation.
+- Shi-Tomasi feature detection on configurable image-grid regions
+- KLT feature tracking across bootstrap and continuous-operation frames
+- Fundamental-matrix bootstrapping with RANSAC and triangulation
+- P3P pose estimation with RANSAC
+- Optional ground-plane scale initialization
+- Optional sliding-window bundle adjustment
+- Live trajectory, keypoint, optical-flow, and local-map visualization
 
-### Continous Operation
-The problem is cast into a Markovian process where the current state depends only on the previous state, previous frame, and current frame: $S_{k} = f(S_{k-1}, I_{k-1}, I_k)$. The state contains the information required by the function $f$ to:
-- Track features from the previous frame to the current frame
-- Estimate the current pose
-- Triangulate new landmarks
-- Apply sliding-window bundle adjustment to refine pose and landmark estimates
+## Repository Layout
 
-### Algorithms
-Listed below are the algorithms used for the main functionality:
-- **Feature extraction**: *Shi-Tomasi corner detector*
-- **Feature tracking**: *Kincade-Lucas-Tomasi (KLT) tracker*
-- **Fundamental matrix estimation**: *8-Point algorithm with RANSAC*
-- **Triangulation**: *Least Squares*
-- **Ground-plane estimation**: *plane with RANSAC*
-- **Pose estimation**: P3P with RANSAC
+```text
+.
+|-- main.py                  # Pipeline configuration, VO state, CLI entrypoint
+|-- BA_helper.py             # Bundle-adjustment packing, projection, residuals
+|-- GD_helper.py             # Ground-plane and scale-estimation helpers
+|-- visualization.py         # Matplotlib/OpenCV visualization utilities
+|-- dataset_loading.py       # Dataset discovery/calibration helpers
+|-- env.yml                  # Conda environment
+|-- assets/                  # Demo media
+|-- kitti/                   # Local KITTI data placeholder
+|-- malaga/                  # Local Malaga data placeholder
+|-- parking/                 # Local parking data placeholder
+`-- VAMR_Rome_dataset/       # Local custom dataset placeholder
+```
 
-### Datasets
-Four datasets are used for testing:
-- [Malaga 07](https://www.mrpt.org/MalagaUrbanDataset#:~:text=malaga%2Durban%2Ddataset%2Dextract%2D07.zip)
-- [KITTI 05](https://www.cvlibs.net/datasets/kitti/raw_data.php)
-- Parking
-- Custom
+Dataset payloads, caches, logs, and generated outputs are ignored by Git. The placeholder `.gitignore` files keep the expected dataset folders visible on GitHub.
 
-Malaga 07 and KITTI 05 can be downloaded, extracted, and copied into the corrisponding folders in the repo to validate functionality.
+## Setup
 
-## Development Environment
-The project uses a Conda environment named: vo_env
-To see details, check out `env.yml` in the root directory.
+Create the Conda environment from the repository root:
 
-### Creating the Environment
+```bash
+conda env create -f env.yml
+conda activate vo_env
+```
 
-From the repository root, run:
+If the environment already exists:
 
-`conda env create -f env.yml`
+```bash
+conda env update -f env.yml --prune
+conda activate vo_env
+```
 
-If the environment already exists, update it with:
+Quick dependency check:
 
-`conda env update -f env.yml --prune`
+```bash
+python -c "import cv2; print(cv2.__version__)"
+```
 
-### Using the Project in VS Code
+## Datasets
 
-Always open the project through the workspace file:
+The pipeline supports four layouts:
 
-- Open VS Code
-- File -> Open Workspace from File
-- Select vo.code-workspace
+- `D.KITTI`: KITTI sequence 05 under `kitti/kitti05/kitti`
+- `D.MALAGA`: Malaga urban extract 07 under `malaga/malaga-urban-dataset-extract-07`
+- `D.PARKING`: parking dataset under `parking/parking`
+- `D.CUSTOM`: custom Rome dataset under `VAMR_Rome_dataset/VAMR_Rome_dataset`
 
-If VS Code prompts for a Python interpreter, select: `conda: vo_env`
+Select the dataset by changing `DATASET` near the top of `main.py`. Keep large image folders local; they should not be committed.
 
-### Verifying the Installation
-Open a VS Code terminal and run:
+## Run
 
-`python -c "import cv2; print(cv2.__version__)"`
+Default run, with sliding-window BA and scale enabled:
 
-An OpenCV version 4.8 or higher should be printed.
+```bash
+python main.py
+```
 
-### Contributor Notes
-- Do not install OpenCV using pip inside this environment
-- Always open the project via vo.code-workspace
-- Update environment.yml if dependencies change
-- Re-run the update command after pulling changes
+Useful options:
+
+```bash
+python main.py --no-ba
+python main.py --no-scale
+python main.py --max-frames 100
+python main.py --separate-windows
+python main.py --show-ground-debug
+```
+
+If the selected dataset folder is empty, `main.py` exits with a clear message explaining how many frames were found and where it expected them.
+
+## Development Notes
+
+- The script is now import-safe: importing `main.py` no longer starts the pipeline.
+- Generated bytecode and local dataset payloads are excluded through `.gitignore`.
+- Keep `env.yml` updated when dependencies change.
+- Use `dataset_loading.py` for lightweight dataset discovery in notebooks or experiments.

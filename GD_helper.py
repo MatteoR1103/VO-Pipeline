@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import numpy as np
 
 
 def get_mask_indices(
-    H,
-    W,
-    rows,
-    cols,
+    H: int,
+    W: int,
+    rows: int,
+    cols: int,
     pts: np.ndarray
 ) -> np.ndarray:
     """
@@ -23,10 +25,10 @@ def get_mask_indices(
     Returns:
         np.ndarray: (N,) array of mask indices
     """
-    
+
     pts = np.asarray(pts)
-    u = pts[:,0]
-    v = pts[:,1]
+    u = pts[:, 0]
+    v = pts[:, 1]
 
     cell_h = H / rows
     cell_w = W / cols
@@ -44,22 +46,25 @@ def fit_ground_plane_ransac(
     pts: np.ndarray,
     n_iters: int = 200,
     dist_thresh: float = 0.05,
-    expected_normal: np.ndarray = np.array([0, -1, 0]), 
-    angle_thresh: float = 0.95, # Cosine similarity (approx 25 degrees)
+    expected_normal: np.ndarray | None = None,
+    angle_thresh: float = 0.95,
 ):
     """
-    Fits a plane, that aligns with normal.
+    Fit a plane whose normal is close to the expected direction.
     """
+    if expected_normal is None:
+        expected_normal = np.array([0, -1, 0])
+
     X = pts.T  # (N,3)
     N = X.shape[0]
-    
+
     # Need at least 3 points
     if N < 3:
         return np.array([0, 1, 0]), 0.0, np.zeros(N, dtype=bool)
 
     best_inliers = np.zeros(N, dtype=bool)
     best_count = 0
-    best_model = (np.array([0, -1, 0]), 0.0) # Default fallback
+    best_model = (expected_normal, 0.0)
 
     for _ in range(n_iters):
         # 1. Sample
@@ -75,9 +80,7 @@ def fit_ground_plane_ransac(
             continue
         n = n / norm
 
-        # Angle Constraint
-        # Check if normal is roughly parallel to UP vector
-        # abs() handles both Up and Down directions
+        # Keep normals roughly parallel to the expected up/down direction.
         if abs(np.dot(n, expected_normal)) < angle_thresh:
             continue
         d = -n @ p1
@@ -96,51 +99,42 @@ def fit_ground_plane_ransac(
     if best_count < 3:
         return best_model[0], best_model[1], best_inliers
 
-    # 4. Refinement 
+    # 4. Refinement
     X_in = X[best_inliers]
     centroid = X_in.mean(axis=0)
     # Centering improves numerical stability
     _, _, Vt = np.linalg.svd(X_in - centroid)
     n_refined = Vt[-1]
-    
-    # Ensure normal points in same direction as expected_normal (optional)
+
+    # Ensure normal points in same direction as expected_normal.
     if np.dot(n_refined, expected_normal) < 0:
         n_refined = -n_refined
-        
+
     d_refined = -n_refined @ centroid
 
     return n_refined, d_refined, best_inliers
 
-def estimate_ground_height(pts_3d, car_height):
+def estimate_ground_height(pts_3d: np.ndarray, car_height: float):
     if pts_3d.shape[1] < 10:
-        print("ERROR")
-        return None
+        return None, None
 
-    # Calculate median depth to scale threshold
+    # Calculate median depth to scale threshold.
     d_ref = np.median(np.linalg.norm(pts_3d, axis=0))
-    
-    # Relaxed threshold slightly
-    dist_thresh = 0.005 * d_ref 
+    dist_thresh = 0.005 * d_ref
 
-    expected_up = np.array([0, 1, 0]) 
+    expected_up = np.array([0, 1, 0])
     n, d, inliers = fit_ground_plane_ransac(
-        pts_3d, 
+        pts_3d,
         dist_thresh=dist_thresh,
         expected_normal=expected_up
     )
 
-    # Safety check: if empty mask
     if inliers.sum() == 0:
-        print("No inliers")
-        return None
-
-    # Relaxed ratio check 
-    inlier_ratio = inliers.sum() / pts_3d.shape[1]
-    # d is distance from origin to plane.
-    height = abs(d) #of the points in the world coordinate
-    print(inlier_ratio, car_height-height)
-    if inlier_ratio > 0.35 and 0.15 < abs(car_height-height)< 1.0:    
-        return height, inliers
-    else: 
-        print("NOT ENOUGH INLIERS TO ESTIMATE A GOOD PLANE ")
         return None, None
+
+    inlier_ratio = inliers.sum() / pts_3d.shape[1]
+    height = abs(d)
+    if inlier_ratio > 0.35 and 0.15 < abs(car_height - height) < 1.0:
+        return height, inliers
+
+    return None, None

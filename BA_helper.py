@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import cv2
 
@@ -5,17 +7,16 @@ from scipy.sparse import lil_matrix
 
 
 def as_lk_points(x: np.ndarray) -> np.ndarray:
-        """
-        Convert keypoints to OpenCV LK format:
-        (N,1,2), float32, contiguous
-        """
-        if x.size == 0:
-            return np.empty((0, 1, 2), dtype=np.float32)
+    """
+    Convert keypoints to OpenCV LK format: (N, 1, 2), float32, contiguous.
+    """
+    if x.size == 0:
+        return np.empty((0, 1, 2), dtype=np.float32)
 
-        if x.ndim == 2 and x.shape[1] == 2:
-            x = x[:, None, :]
+    if x.ndim == 2 and x.shape[1] == 2:
+        x = x[:, None, :]
 
-        return np.ascontiguousarray(x, dtype=np.float32)
+    return np.ascontiguousarray(x, dtype=np.float32)
 
 
 def build_window_data(S: dict) -> tuple[int, list[tuple[int, int]], np.ndarray]:
@@ -29,27 +30,33 @@ def build_window_data(S: dict) -> tuple[int, list[tuple[int, int]], np.ndarray]:
         obs_pixels: (N, 2) array of observed pixel coordinates
     """
     # Get all unique landmark IDs currently being tracked in the window
-    active_ids = S["ids"]         
+    active_ids = S["ids"]
     # Map global IDs to local indices [0...M-1] for the optimizer to work with
     id_to_idx = {id_: i for i, id_ in enumerate(active_ids)}
     n_landmarks = len(active_ids)
-    
-    obs_list = [] # List of (pose_idx, landmark_idx)
+
+    obs_list = []  # List of (pose_idx, landmark_idx)
     obs_pixels = []
-    
+
     # Loop through history deque to find observations of our active landmarks
     for f_idx, (pixels, ids) in enumerate(S["obs_history"]):
         for p, id_ in zip(pixels, ids):
             if id_ in id_to_idx:   # only consider landmarks still being tracked
                 obs_list.append((f_idx, id_to_idx[id_]))
-                obs_pixels.append(p[0]) # (u, v) coordinates
-                
+                obs_pixels.append(p[0])  # (u, v) coordinates
+
     return n_landmarks, obs_list, np.array(obs_pixels)
 
 
 
 
-def compute_rep_err(x_vec, window_poses: list, n_landmarks: int, obs_map: dict, k: np.ndarray) -> np.ndarray:
+def compute_rep_err(
+    x_vec: np.ndarray,
+    window_poses: list[np.ndarray],
+    n_landmarks: int,
+    obs_map: dict,
+    k: np.ndarray,
+) -> np.ndarray:
     """
     Args:
         x_vec: parameters optimized by the solver
@@ -68,14 +75,16 @@ def compute_rep_err(x_vec, window_poses: list, n_landmarks: int, obs_map: dict, 
         pose = poses[f_idx]
         visible_ids = obs_map[f_idx]['ids']
         observed_pixels = obs_map[f_idx]['pixels']
-        if visible_ids.shape[0] > 0: 
+        if visible_ids.shape[0] > 0:
             projected = project_points(landmarks[:, visible_ids], pose, k)
-        else: 
+        else:
             continue
         # Error calculation
         err = (observed_pixels - projected).flatten()
         residuals.append(err)
 
+    if not residuals:
+        return np.empty(0)
     return np.concatenate(residuals)
 
 
@@ -93,10 +102,10 @@ def project_points(X: np.ndarray, T: np.ndarray, k: np.ndarray) -> np.ndarray:
     # Transform to camera frame
     X_hom = np.vstack((X, np.ones(X.shape[1])))
     P_cam = T @ X_hom # (3, K)
-    
+
     # Project to image plane
     P_img = k @ P_cam
-    
+
     pixels = P_img[:2] / P_img[2]
     return pixels.T # (K, 2)
 
@@ -117,10 +126,10 @@ def pack_params(window_poses: list[np.ndarray], window_landmarks: np.ndarray) ->
         t = window_poses[i][:, 3]
         rvec, _ = cv2.Rodrigues(R)
         pose_params.append(np.hstack((rvec.flatten(), t.flatten())))
-    
+
     # Flatten landmarks (3 * M)
     landmark_params = window_landmarks.flatten()
-    
+
     return np.concatenate((*pose_params, landmark_params))
 
 def unpack_params(x_vec: np.ndarray, window_poses: list[np.ndarray], n_landmarks: int) -> tuple[dict[int, np.ndarray], np.ndarray]:
@@ -143,11 +152,11 @@ def unpack_params(x_vec: np.ndarray, window_poses: list[np.ndarray], n_landmarks
         t = x_vec[idx+3:idx+6]
         R, _ = cv2.Rodrigues(rvec)
         poses[i+1] = np.hstack((R, t.reshape(3, 1)))
-        
+
     # Extract landmarks
     l_start = n_active_poses * 6
     landmarks = x_vec[l_start:].reshape(3, n_landmarks)
-    
+
     return (poses, landmarks)
 
 
@@ -167,7 +176,7 @@ def unpack_params_T(x_vec: np.ndarray, window_poses: list[np.ndarray], n_landmar
     new_S = S.copy()
     # Extract poses
     for i in range(n_active_poses):
-        
+
         #Update S["T"]
         past_pose = window_poses[i+1]
         past_pose = past_pose.flatten()[None, :]
@@ -178,11 +187,11 @@ def unpack_params_T(x_vec: np.ndarray, window_poses: list[np.ndarray], n_landmar
         R, _ = cv2.Rodrigues(rvec)
         poses[i+1] = np.hstack((R, t.reshape(3, 1)))
         new_S["T"][indices, :] = poses[i+1].flatten()[None, :]
-        
+
     # Extract landmarks
     l_start = n_active_poses * 6
     landmarks = x_vec[l_start:].reshape(3, n_landmarks)
-    
+
     return (poses, landmarks, new_S)
 
 
@@ -199,16 +208,16 @@ def get_jac_sparsity(n_poses: int, n_landmarks: int, obs_list: list[tuple[int, i
     n_vars = (n_poses - 1) * 6 + n_landmarks * 3 # We fix the first pose
     n_residuals = len(obs_list) * 2
     sparsity = lil_matrix((n_residuals, n_vars), dtype=int)
-    
+
     for i, (f_idx, l_idx) in enumerate(obs_list):
         res_idx = i * 2
         # If not the fixed anchor pose (index 0)
         if f_idx > 0:
             var_idx = (f_idx - 1) * 6
             sparsity[res_idx:res_idx+2, var_idx:var_idx+6] = 1
-        
+
         # Link to landmark parameters
         l_var_idx = ((n_poses - 1) * 6) + (l_idx * 3)
         sparsity[res_idx:res_idx+2, l_var_idx:l_var_idx+3] = 1
-        
+
     return sparsity

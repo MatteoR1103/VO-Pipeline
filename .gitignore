@@ -1,0 +1,46 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local IDE/editor state
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local data, generated outputs, and logs
+outputs/
+runs/
+logs/
+*.log
+
+# Dataset payloads are intentionally kept out of Git.
+kitti/*
+!kitti/.gitignore
+malaga/*
+!malaga/.gitignore
+parking/*
+!parking/.gitignore
+VAMR_Rome_dataset/VAMR_Rome_dataset/*
+!VAMR_Rome_dataset/VAMR_Rome_dataset/.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# agentic
+.codex/
+

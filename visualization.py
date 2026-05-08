@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 import cv2
 import numpy as np
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
 from matplotlib.patches import FancyArrowPatch
 
 def initTrajectoryPlot(
@@ -43,7 +43,7 @@ def initTrajectoryPlot(
     #     span = 250.0
     #     ax_global.set_xlim(-span/2, span/2)
     #     ax_global.set_ylim(-span/2, span/2)
-    
+
     if gt_path is not None and len(gt_path) > 0:
         x0, y0 = gt_path[0]
         gt_line, = ax_global.plot([], [], "gray", lw=2, label="GT")
@@ -84,7 +84,7 @@ def initTrajectoryPlot(
         first_flow_rgb = np.zeros((480, 640, 3), dtype=np.uint8)
     else:
         first_flow_rgb = cv2.cvtColor(first_flow_bgr, cv2.COLOR_BGR2RGB)
-       
+
 
     flow_im = ax_flow.imshow(first_flow_rgb)
     ax_flow.set_axis_off()
@@ -153,7 +153,7 @@ def initTrajectoryPlot(
     }
     if gt_path is not None and len(gt_path) > 0:
         state["gt_line"] = gt_line
-    
+
     return state
 
 def initTrajectoryPlotNoFlow(
@@ -260,11 +260,11 @@ def updateTrajectoryPlotNoFlowBA(
     n_inliers: int | None = None,
 ):
      # ---------- GLOBAL ----------
-     
+
     points = [state[0] for state in full_trajectory]
     angles = [state[1] for state in full_trajectory]
     theta = angles[-1]
-    
+
     est_path = np.stack(points)
     x, y = est_path[:, 0], est_path[:, 1]
     plot_state["est_line"].set_data(x, y)
@@ -328,7 +328,7 @@ def updateTrajectoryPlotNoFlowBA(
         plot_state["frames"].append(len(plot_state["frames"]))
         plot_state["kp_hist"].append(int(n_keypoints))
         plot_state["inl_hist"].append(int(n_inliers) if n_inliers is not None else np.nan)
-        
+
         f = plot_state["frames"]
         plot_state["kp_line"].set_data(f, plot_state["kp_hist"])
         plot_state["inl_line"].set_data(f, plot_state["inl_hist"])
@@ -338,7 +338,7 @@ def updateTrajectoryPlotNoFlowBA(
         xmin, xmax = axk.get_xlim()
         if x_now > xmax:
             axk.set_xlim(xmin, x_now + 10)
-        
+
         axk.relim()
         axk.autoscale_view(scaley=True, scalex=False)
 
@@ -361,7 +361,7 @@ def updateTrajectoryPlotBA(
     flow_bgr: np.ndarray | None = None,
     frame_idx: int | None = None,
     n_inliers: int | None = None,
-    scale :float = 1.0, 
+    scale :float = 1.0,
     fps : float = None
 ):
     # ---------- GLOBAL ----------
@@ -370,13 +370,13 @@ def updateTrajectoryPlotBA(
     if plot_state["gt_line"] is not None:
         plot_state["gt_line"].set_data(
         gt[:frame_idx+1, 0],
-        gt[:frame_idx+1, 1]) 
+        gt[:frame_idx+1, 1])
         x0_g, y0_g = float(gt[frame_idx, 0]), float(gt[frame_idx, 1])
 
     points = [state[0] for state in full_trajectory]
     angles = [state[1] for state in full_trajectory]
     theta = angles[-1]
-    
+
     pts_3d = pts3d.copy()
     est_path = scale*np.stack(points)
     pts_3d*=scale
@@ -385,7 +385,7 @@ def updateTrajectoryPlotBA(
     plot_state["est_point"].set_data([x[-1]], [y[-1]])
 
     x0, y0 = float(x[-1]), float(y[-1])
-    
+
     L = plot_state["arrow_len"]
     plot_state["heading_arrow"].set_positions(
         (x0, y0), (x0 + L*np.cos(theta), y0 + L*np.sin(theta))
@@ -451,7 +451,7 @@ def updateTrajectoryPlotBA(
         plot_state["frames"].append(len(plot_state["frames"]))
         plot_state["kp_hist"].append(int(n_keypoints))
         plot_state["inl_hist"].append(int(n_inliers) if n_inliers is not None else np.nan)
-        
+
         f = plot_state["frames"]
         plot_state["kp_line"].set_data(f, plot_state["kp_hist"])
         plot_state["inl_line"].set_data(f, plot_state["inl_hist"])
@@ -461,7 +461,7 @@ def updateTrajectoryPlotBA(
         xmin, xmax = axk.get_xlim()
         if x_now > xmax:
             axk.set_xlim(xmin, x_now + 10)
-        
+
         axk.relim()
         axk.autoscale_view(scaley=True, scalex=False)
 
@@ -470,8 +470,10 @@ def updateTrajectoryPlotBA(
         if tot is None:
             plot_state["fig"].suptitle(f"Frame {frame_idx}")
         else:
-            plot_state["fig"].suptitle(f"Frame {frame_idx} / {tot}    |    FPS (not considering plotting): {fps:.1f}"
-)
+            title = f"Frame {frame_idx} / {tot}"
+            if fps is not None:
+                title += f"    |    FPS (not considering plotting): {fps:.1f}"
+            plot_state["fig"].suptitle(title)
     plt.pause(0.001)
 
 def draw_optical_flow(
@@ -498,7 +500,7 @@ def draw_optical_flow(
     """
     vis = img.copy()
 
-    # Remove singleton dimension → (N, 2)
+    # Remove singleton dimension -> (N, 2)
     p0 = pts_prev.reshape(-1, 2)
     p1 = pts_curr.reshape(-1, 2)
 
@@ -564,14 +566,16 @@ def visualize_ground_plane(
     d: float,
     title="Ground plane RANSAC (camera frame)"
 ):
-    import matplotlib.pyplot as plt
-    import numpy as np
-
     fig = plt.figure(figsize=(9, 7))
     ax = fig.add_subplot(111, projection="3d")
 
     # --- RANSAC inliers ---
     X_in = X_ground[:, inliers]
+    if X_in.size == 0:
+        ax.set_title(f"{title}: no inliers")
+        plt.tight_layout()
+        plt.show()
+        return
 
     # --- all points (light background) ---
     ax.scatter(
@@ -592,7 +596,7 @@ def visualize_ground_plane(
     )
 
     # --- plane surface ---
-    # Plane: n_x x + n_y y + n_z z + d = 0 → y = ...
+    # Plane: n_x x + n_y y + n_z z + d = 0 -> y = ...
     xx, zz = np.meshgrid(
         np.linspace(X_in[0].min(), X_in[0].max(), 30),
         np.linspace(X_in[2].min(), X_in[2].max(), 30)
@@ -645,7 +649,6 @@ def draw_plane_on_image(
     z_vals = z_vals**1.3
     for z in z_vals:
         # make it narrower close, wider far (perspective-like)
-        x_max = 0.4 * z
         for x in np.arange(x_range[0], x_range[1], step):
             if abs(n[1]) < 1e-6:
                 continue
@@ -657,7 +660,7 @@ def draw_plane_on_image(
 
     pts_world = np.array(pts_world).T  # (3, N)
 
-    # World → camera
+    # World -> camera
     pts_cam = R @ pts_world + t[:, None]
 
     mask = pts_cam[2] > 1.0
