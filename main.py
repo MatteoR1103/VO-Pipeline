@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from scipy.optimize import least_squares
 
-from visualization import (
+from src.visualization import (
     draw_new_features,
     draw_optical_flow,
     draw_plane_on_image,
@@ -20,14 +20,14 @@ from visualization import (
     updateTrajectoryPlotNoFlowBA,
     visualize_ground_plane,
 )
-from BA_helper import (
+from src.BA_helper import (
     as_lk_points,
     compute_rep_err,
     get_jac_sparsity,
     pack_params,
     unpack_params_T,
 )
-from GD_helper import get_mask_indices, estimate_ground_height, fit_ground_plane_ransac
+from src.GD_helper import get_mask_indices, estimate_ground_height, fit_ground_plane_ransac
 
 class D:
     KITTI = 0
